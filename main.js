@@ -1,11 +1,5 @@
-const CREDENCIALES = {
-    login: "7a7a0d14a3acbb02458c19bdcd420be2",
-    secretKey: "6RiSgQUFRjfo4VW0"
-};
-
 const APPS = {
     checkout: {
-        baseUrl: "https://checkout-test.placetopay.com",
         endpoint: "/api/session",
         payload: {
             "locale": "es_CO",
@@ -23,7 +17,6 @@ const APPS = {
         }
     },
     paymentLink: {
-        baseUrl: "https://sites-test.placetopay.com",
         endpoint: "/api/payment-link",
         payload: {
             "name": "Link de Pago Técnico",
@@ -38,7 +31,6 @@ const APPS = {
         }
     },
     gateway: {
-        baseUrl: "https://api-test.placetopay.com/rest",
         endpoint: "/gateway/information",
         payload: {
             "locale": "es_CO",
@@ -81,9 +73,7 @@ function arrayBufferToBase64(buffer) {
 function getRandomString(length) {
     const array = new Uint8Array(length);
     crypto.getRandomValues(array);
-    return Array.from(array)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+    return Array.from(array).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function generateAuth(login, secretKey) {
@@ -104,22 +94,32 @@ async function generateAuth(login, secretKey) {
 }
 
 const correrPrueba = async (appKey) => {
-    const config = APPS[appKey];
     document.getElementById('log').innerHTML = '';
 
+    const login = document.getElementById('login').value.trim();
+    const secretKey = document.getElementById('tranKey').value.trim();
+    const customBaseUrl = document.getElementById(`input-url-${appKey}`).value.trim();
     const sendReferer = document.getElementById('chk-referer').checked;
+
+    if (!login || !secretKey || !customBaseUrl) {
+        logMessage(`🚨 ERROR: Login, Secret Key y URL son obligatorios.`, 'error');
+        return;
+    }
+
+    const config = APPS[appKey];
+    const fullUrl = `${customBaseUrl.replace(/\/$/, "")}${config.endpoint}`;
     const refPolicy = sendReferer ? "strict-origin-when-cross-origin" : "no-referrer";
 
-    logMessage(`Auditoría de seguridad hacia: ${config.baseUrl}${config.endpoint}`, 'info');
+    logMessage(`🛡️ Auditoría de seguridad hacia: ${fullUrl}`, 'info');
     logMessage(`Configuración de Referer: ${refPolicy}`, 'info');
 
     try {
-        const auth = await generateAuth(CREDENCIALES.login, CREDENCIALES.secretKey);
+        const auth = await generateAuth(login, secretKey);
         const body = JSON.stringify({ auth, ...config.payload });
 
         logMessage(`Ejecutando ataque simulado (Fetch POST desde navegador)...`);
 
-        const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}${config.endpoint}`, {
+        const response = await fetch(fullUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: body,
@@ -128,29 +128,28 @@ const correrPrueba = async (appKey) => {
 
         const json = await response.json();
 
-        // SI LA PETICIÓN PASA, ESTO ES UN ERROR DE SEGURIDAD
         if (response.ok) {
             logMessage(`🚨 VULNERABILIDAD DETECTADA: El servidor permitió la petición (HTTP ${response.status})`, 'error');
             logMessage(`El CORS está abierto. Las credenciales viajan expuestas desde el navegador y el servidor lo está permitiendo.`, 'warn');
             logMessage(JSON.stringify(json, null, 2));
         } else {
             logMessage(`🚨 RIESGO DE SEGURIDAD: Aunque la API falló (HTTP ${response.status}), el CORS permitió leer la respuesta.`, 'error');
-            logMessage(`El servidor debe bloquear completamente las peticiones desde orígenes no autorizados.`, 'warn');
+            logMessage(`El servidor debe bloquear completamente las peticiones desde orígenes no autorizados sin devolver JSON.`, 'warn');
             logMessage(JSON.stringify(json, null, 2));
         }
 
     } catch (error) {
-        // SI LA PETICIÓN FALLA (TypeError), LA SEGURIDAD ES CORRECTA
         logMessage(`✅ PRUEBA EXITOSA: LA PETICIÓN FUE BLOQUEADA POR CORS`, 'success');
+        logMessage(`\n🛡️ ANÁLISIS DE SEGURIDAD: El servidor rechazó la comunicación con el navegador. Esto es el comportamiento esperado y seguro.`, 'success');
+        logMessage(`Las APIs con autenticación WSSE deben ser consumidas única y exclusivamente de Backend a Backend.`, 'info');
 
-        logMessage(`\n🛡️ ANÁLISIS DE SEGURIDAD: El servidor rechazó la comunicación con el navegador. Esto es el comportamiento esperado y correcto.`, 'info');
-        logMessage(`Las APIs con autenticación WSSE contienen un "secretKey" y deben ser consumidas única y exclusivamente desde el backend (servidor a servidor).`, 'info');
+        if (!sendReferer) {
+            logMessage(`\nNota: Dado que apagaste el Referer, si con el Referer prendido la petición pasaba, significa que tu WAF está exigiendo el Referer para validar orígenes.`, 'info');
+        }
 
         logMessage(`\n(Mensaje técnico: ${error.message})`, 'info');
     }
 };
-
-window.correrPrueba = correrPrueba;
 
 const btnCheckout = document.getElementById('btn-checkout');
 const btnPaymentLink = document.getElementById('btn-paymentLink');
