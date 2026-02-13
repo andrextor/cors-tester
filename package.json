@@ -1,0 +1,14 @@
+{
+  "name": "cors-tester",
+  "version": "1.0.0",
+  "license": "ISC",
+  "author": "Iván Andrés López",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
